@@ -48,7 +48,6 @@ class TestTBClient < Minitest::Test
     packet[:operation] = TBClient::Bindings::Operation[:CREATE_ACCOUNTS]
 
     client.submit(packet, TBClient::Bindings::CreateAccountsResult) do |result|
-      binding.irb
       assert false
     end
 

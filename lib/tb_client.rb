@@ -13,12 +13,11 @@ module TBClient
 
   Request = Struct.new(:packet, :result_type, :block) do
     def initialize(packet, result_type, &block)
-      super(packet, result_type, &block)
+      super(packet, result_type, block)
     end
   end
 
   class Client
-
     def initialize(addresses: "3000", cluster_id: 0, client_id: 1)
       @addresses = addresses.to_s
       @cluster_id = TBClient::Types::UINT128.to_native(cluster_id, nil)
@@ -102,14 +101,12 @@ module TBClient
       )
     end
 
-    def submit(packet, result_type, &blk)
+    def submit(packet, result_type, &result_block)
       request_id = packet[:user_data].read_uint64
       queue = SizedQueue.new(1)
-      puts "Sending Request: #{request_id}"
       @inflight_requests[request_id] = Request.new(packet, result_type) do |result|
-        puts "Received Request: #{request_id}"
-        if blk
-          blk.call(result)
+        if result_block
+          result_block.call(result)
         else
           queue << result
         end
@@ -120,34 +117,24 @@ module TBClient
         packet,
       )
 
-      queue.pop unless blk
+      queue.pop unless result_block
     end
 
     private
 
     def callback(client_id, packet, timestamp, result_ptr, result_len)
       request_id = packet[:user_data].read_uint64
-      puts "Request Received: #{request_id}"
-
       request = @inflight_requests.delete(request_id)
-      puts "Request: #{request.inspect}"
       raise "Request not found for ID: #{request_id}" unless request.is_a?(Request)
 
       result_type = request.result_type
-      puts "Result Type: #{result_type}"
-      num = result_len / result_type.size
-      puts "Result Length: #{result_len} Num: #{num} Size: #{result_type.size}"
-      binding.irb
-      new_result_ptr = FFI::MemoryPointer.new(result_type, result_len / result_type.size)
-      new_result_ptr.put_bytes(0, result_ptr.read_bytes(result_len))
-
-      result = Array.new(result_len / result_type.size) do |i|
-        bytes = result_ptr.get_bytes(i * result_type.size, result_type.size)
-        result_type.from_native(bytes, nil)
+      results = Array.new(result_len / result_type.size) do |i|
+        ptr = FFI::MemoryPointer.new(result_type, 1)
+        ptr.put_bytes(0, result_ptr.get_bytes(i * result_type.size, result_type.size))
+        result_type.new(ptr)
       end
-      puts result
 
-      request.block.call(result)
+      request.block.call(results)
     end
   end
 end

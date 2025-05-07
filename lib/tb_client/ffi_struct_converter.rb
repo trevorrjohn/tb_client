@@ -12,7 +12,6 @@ module TBClient
         if value.is_a?(self)
           value
         else
-          ptr = FFI::MemoryPointer.new(value)
           self.new(ptr)
         end
       end

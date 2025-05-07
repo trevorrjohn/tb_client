@@ -19,7 +19,16 @@ module TBClient
             obj[:high] = (value >> 64) & 0xFFFFFFFFFFFFFFFF
             obj.pointer
           when FFI::Pointer, FFI::MemoryPointer
-            self.new(value).pointer
+            instance = UINT128.new
+            instance[:low] = value.read_uint64
+            instance[:high] = FFI::Pointer.new(value.address + 8).read_uint64
+            instance
+          when Array
+            raise ArgumentError, "Array must have 2 elements" unless value.length == 2
+            obj = self.new
+            instance[:low] = value[0] & 0xFFFFFFFFFFFFFFFF
+            instance[:high] = value[1] & 0xFFFFFFFFFFFFFFFF
+            obj
           else
             raise TypeError, "can't convert #{value.class} to UINT128"
           end
@@ -28,17 +37,23 @@ module TBClient
         def from_native(value, _ctx)
           if value.is_a?(self)
             value
-          else
+          elsif value.is_a?(FFI::Struct::InlineArray)
             obj = self.new
-            ptr = FFI::Pointer.new(value)
-            obj[:low] = ptr.read_uint64(0)
-            obj[:high] = ptr.read_uint64(8)
+            obj[:low] = value[0]
+            obj[:high] = value[1]
             obj
+          elsif value.is_a?(FFI::Pointer) || value.is_a?(FFI::MemoryPointer)
+            obj = self.new
+            obj[:low] = value.read_uint64
+            obj[:high] = FFI::Pointer.new(value + 8).read_uint64
+            obj
+          else
+            raise TypeError, "can't convert #{value.class} to UINT128"
           end
         end
 
         def native_type
-          @native_type ||= FFI::Type::Mapped.new(FFI::Type::ARRAY.new(FFI::Type::UINT64, 2))
+          @native_type ||= FFI::Type::Array.new(FFI::Type::UINT64, 2)
         end
       end
 
@@ -48,6 +63,10 @@ module TBClient
 
       def to_s
         to_i.to_s
+      end
+
+      def inspect
+        "#<#{self.class.name} i=#{to_i}>"
       end
     end
   end

@@ -240,7 +240,6 @@ module TBClient
         timestamp: :uint64,
       )
     end
-      # 6 * 128 + 64 + 21 * 3 + 16 * 2 + 64
 
     class Transfer < FFI::Struct
       include FFIStructConverter
